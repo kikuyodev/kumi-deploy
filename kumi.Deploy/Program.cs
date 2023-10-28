@@ -20,18 +20,18 @@ public static class Program
 
     private const int keep_delta_count = 4;
     
-    public static string? GitHubAccessToken = ConfigurationManager.AppSettings["GitHubAccessToken"];
-    public static bool GitHubUpload = bool.Parse(ConfigurationManager.AppSettings["GitHubUpload"] ?? "false");
-    public static string? GitHubUsername = ConfigurationManager.AppSettings["GitHubUsername"];
-    public static string? GitHubRepoName = ConfigurationManager.AppSettings["GitHubRepoName"];
-    public static string? SolutionName = ConfigurationManager.AppSettings["SolutionName"];
-    public static string? ProjectName = ConfigurationManager.AppSettings["ProjectName"];
-    public static string? NuSpecName = ConfigurationManager.AppSettings["NuSpecName"];
-    public static bool IncrementVersion = bool.Parse(ConfigurationManager.AppSettings["IncrementVersion"] ?? "true");
-    public static string? PackageName = ConfigurationManager.AppSettings["PackageName"];
-    public static string? CodeSigningCertificate = ConfigurationManager.AppSettings["CodeSigningCertificate"];
+    public static readonly string? GIT_HUB_ACCESS_TOKEN = ConfigurationManager.AppSettings["GitHubAccessToken"];
+    public static readonly bool GIT_HUB_UPLOAD = bool.Parse(ConfigurationManager.AppSettings["GitHubUpload"] ?? "false");
+    public static readonly string? GIT_HUB_USERNAME = ConfigurationManager.AppSettings["GitHubUsername"];
+    public static readonly string? GIT_HUB_REPO_NAME = ConfigurationManager.AppSettings["GitHubRepoName"];
+    public static readonly string? SOLUTION_NAME = ConfigurationManager.AppSettings["SolutionName"];
+    public static readonly string? PROJECT_NAME = ConfigurationManager.AppSettings["ProjectName"];
+    public static readonly string? NU_SPEC_NAME = ConfigurationManager.AppSettings["NuSpecName"];
+    public static readonly bool INCREMENT_VERSION = bool.Parse(ConfigurationManager.AppSettings["IncrementVersion"] ?? "true");
+    public static readonly string? PACKAGE_NAME = ConfigurationManager.AppSettings["PackageName"];
+    public static readonly string? CODE_SIGNING_CERTIFICATE = ConfigurationManager.AppSettings["CodeSigningCertificate"];
 
-    public static string GitHubApiEndpoint => $"https://api.github.com/repos/{GitHubUsername}/{GitHubRepoName}/releases";
+    public static string GitHubApiEndpoint => $"https://api.github.com/repos/{GIT_HUB_USERNAME}/{GIT_HUB_REPO_NAME}/releases";
 
     private static string? solutionPath;
 
@@ -82,7 +82,7 @@ public static class Program
         var increment = 0;
 
         if (lastRelease?.TagName.StartsWith(verBase, StringComparison.InvariantCulture) ?? false)
-            increment = int.Parse(lastRelease.TagName.Split('.')[2]) + (IncrementVersion ? 1 : 0);
+            increment = int.Parse(lastRelease.TagName.Split('.')[2]) + (INCREMENT_VERSION ? 1 : 0);
 
         var version = $"{verBase}{increment}";
         var targetPlatform = RuntimeInfo.OS;
@@ -92,9 +92,9 @@ public static class Program
         if (args.Length > 2 && !string.IsNullOrEmpty(args[2]))
             Enum.TryParse(args[2], true, out targetPlatform);
 
-        AnsiConsole.MarkupLine($"[gray]Increment Version:   [/]{IncrementVersion}");
-        AnsiConsole.MarkupLine($"[gray]Signing Certificate: [/]{CodeSigningCertificate}");
-        AnsiConsole.MarkupLine($"[gray]Upload to GitHub:    [/]{GitHubUpload}");
+        AnsiConsole.MarkupLine($"[gray]Increment Version:   [/]{INCREMENT_VERSION}");
+        AnsiConsole.MarkupLine($"[gray]Signing Certificate: [/]{CODE_SIGNING_CERTIFICATE}");
+        AnsiConsole.MarkupLine($"[gray]Upload to GitHub:    [/]{GIT_HUB_UPLOAD}");
         Console.WriteLine();
         AnsiConsole.MarkupLine($"[bold]Ready to deploy version {version} on platform {targetPlatform}![/]");
         
@@ -114,10 +114,10 @@ public static class Program
                         if (lastRelease != null)
                             getAssetsFromRelease(lastRelease);
 
-                        runCommand("dotnet", $"publish -f net7.0 -r win-x64 {ProjectName} -o {stagingPath} --configuration Release /p:Version={version}");
+                        runCommand("dotnet", $"publish -f net7.0 -r win-x64 {PROJECT_NAME} -o {stagingPath} --configuration Release /p:Version={version}");
 
                         ctx.Status("Creating NuGet deployment package...");
-                        runCommand(nugetPath, $"pack {NuSpecName} -Version {version} -Properties Configuration=Deploy -OutputDirectory {stagingPath} -BasePath {stagingPath}");
+                        runCommand(nugetPath, $"pack {NU_SPEC_NAME} -Version {version} -Properties Configuration=Deploy -OutputDirectory {stagingPath} -BasePath {stagingPath}");
 
                         pruneReleases();
                         checkReleaseFiles();
@@ -126,7 +126,7 @@ public static class Program
 
                         var codeSigningCmd = string.Empty;
 
-                        if (!string.IsNullOrEmpty(CodeSigningCertificate))
+                        if (!string.IsNullOrEmpty(CODE_SIGNING_CERTIFICATE))
                         {
                             string? codeSigningPassword = null;
 
@@ -137,10 +137,10 @@ public static class Program
 
                             codeSigningCmd = string.IsNullOrEmpty(codeSigningPassword)
                                                  ? ""
-                                                 : $"--signParams=\"/td sha256 /fd sha256 /f {CodeSigningCertificate} /p {codeSigningPassword} /tr http://timestamp.comodoca.com\"";
+                                                 : $"--signParams=\"/td sha256 /fd sha256 /f {CODE_SIGNING_CERTIFICATE} /p {codeSigningPassword} /tr http://timestamp.comodoca.com\"";
                         }
 
-                        var nupkgFilename = $"{PackageName}.{version}.nupkg";
+                        var nupkgFilename = $"{PACKAGE_NAME}.{version}.nupkg";
                         
                         runCommand(squirrelPath,
                             $"releasify --package={stagingPath}\\{nupkgFilename} --releaseDir={releasesPath} {codeSigningCmd}");
@@ -165,7 +165,7 @@ public static class Program
                 }
             });
 
-        if (GitHubUpload)
+        if (GIT_HUB_UPLOAD)
             uploadBuild(version);
         
         AnsiConsole.MarkupLine("[bold green]Done![/]");
@@ -288,12 +288,12 @@ public static class Program
     {
         Process.Start(new ProcessStartInfo
         {
-            FileName = $"https://github.com/{GitHubUsername}/{GitHubRepoName}/releases",
+            FileName = $"https://github.com/{GIT_HUB_USERNAME}/{GIT_HUB_REPO_NAME}/releases",
             UseShellExecute = true
         });
     }
     
-    private static bool canGithub => !string.IsNullOrEmpty(GitHubAccessToken);
+    private static bool canGithub => !string.IsNullOrEmpty(GIT_HUB_ACCESS_TOKEN);
 
     private static GitHubRelease? getLastGithubRelease(bool includeDrafts = false)
     {
@@ -318,7 +318,7 @@ public static class Program
 
         var requireDownload = false;
         
-        if (!File.Exists(Path.Combine(releases_folder, $"{PackageName}-{release.Name}-full.nupkg")))
+        if (!File.Exists(Path.Combine(releases_folder, $"{PACKAGE_NAME}-{release.Name}-full.nupkg")))
         {
             AnsiConsole.MarkupLine("[red]Last version's package not found locally.[/]");
             requireDownload = true;
@@ -379,10 +379,10 @@ public static class Program
 
         while (true)
         {
-            if (File.Exists(Path.Combine(path, $"{SolutionName}.sln")))
+            if (File.Exists(Path.Combine(path, $"{SOLUTION_NAME}.sln")))
                 break;
 
-            if (Directory.Exists(Path.Combine(path, "kumi")) && File.Exists(Path.Combine(path, "kumi", $"{SolutionName}.sln")))
+            if (Directory.Exists(Path.Combine(path, "kumi")) && File.Exists(Path.Combine(path, "kumi", $"{SOLUTION_NAME}.sln")))
             {
                 path = Path.Combine(path, "kumi");
                 break;
@@ -466,7 +466,7 @@ public static class Program
 
     private static void AuthenticatedBlockingPerform(this WebRequest r)
     {
-        r.AddHeader("Authorization", $"token {GitHubAccessToken}");
+        r.AddHeader("Authorization", $"token {GIT_HUB_ACCESS_TOKEN}");
         r.Perform();
     }
 
