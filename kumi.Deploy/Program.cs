@@ -16,10 +16,13 @@ public static class Program
     private static string squirrelPath => getToolPath("Clowd.Squirrel", "Squirrel.exe");
 
     private const string staging_folder = "staging";
+    private const string libraries_folder = "libraries";
     private const string releases_folder = "releases";
 
     private const int keep_delta_count = 4;
     
+    public static readonly string? NUGET_ACCESS_TOKEN = ConfigurationManager.AppSettings["NuGetAccessToken"];
+    public static readonly bool NUGET_UPLOAD = bool.Parse(ConfigurationManager.AppSettings["NuGetUpload"] ?? "false");
     public static readonly string? GITHUB_ACCESS_TOKEN = ConfigurationManager.AppSettings["GitHubAccessToken"];
     public static readonly bool GITHUB_UPLOAD = bool.Parse(ConfigurationManager.AppSettings["GitHubUpload"] ?? "false");
     public static readonly string? GITHUB_USERNAME = ConfigurationManager.AppSettings["GitHubUsername"];
@@ -36,6 +39,7 @@ public static class Program
     private static string? solutionPath;
 
     private static string stagingPath => Path.Combine(Environment.CurrentDirectory, staging_folder);
+    private static string librariesPath => Path.Combine(Environment.CurrentDirectory, libraries_folder);
     private static string releasesPath => Path.Combine(Environment.CurrentDirectory, releases_folder);
 
     private static readonly Stopwatch stopwatch = new Stopwatch();
@@ -103,6 +107,7 @@ public static class Program
         stopwatch.Start();
         
         refreshDirectory(staging_folder);
+        refreshDirectory(libraries_folder);
         Debug.Assert(solutionPath != null);
 
         AnsiConsole.Status()
@@ -121,6 +126,11 @@ public static class Program
 
                         pruneReleases();
                         checkReleaseFiles();
+
+                        ctx.Status("Creating NuGet library packages...");
+                        
+                        runCommand("dotnet", $"pack Kumi.Game --configuration Release -o {librariesPath} -p:PackageVersion={version}");
+                        runCommand("dotnet", $"pack Kumi.Resources --configuration Release -o {librariesPath} -p:PackageVersion={version}");
 
                         ctx.Status("Running squirrel build...");
 
@@ -166,7 +176,10 @@ public static class Program
             });
 
         if (GITHUB_UPLOAD)
-            uploadBuild(version);
+            uploadGitHubBuild(version);
+
+        if (NUGET_UPLOAD)
+            uploadNuGetBuild();
         
         AnsiConsole.MarkupLine("[bold green]Done![/]");
         pauseIfInteractive();
@@ -230,7 +243,7 @@ public static class Program
         File.WriteAllLines(Path.Combine(releases_folder, "RELEASES"), lines);
     }
 
-    private static void uploadBuild(string version)
+    private static void uploadGitHubBuild(string version)
     {
         if (!canGithub)
             return;
@@ -361,6 +374,25 @@ public static class Program
                     req.AuthenticatedBlockingPerform();
                 }
             });
+    }
+    
+    private static bool canNuget => !string.IsNullOrEmpty(NUGET_ACCESS_TOKEN);
+
+    private static void uploadNuGetBuild()
+    {
+        if (!canNuget)
+            return;
+        
+        AnsiConsole.MarkupLine("Publishing to NuGet...");
+
+        foreach (var a in Directory.GetFiles(libraries_folder))
+        {
+            if (Path.GetFileName(a).StartsWith('.'))
+                continue;
+            
+            AnsiConsole.MarkupLine($"[yellow]- Publishing library package {Path.GetFileName(a)}...[/]");
+            runCommand("dotnet", $"nuget push {Path.GetFileName(a)} --api-key {NUGET_ACCESS_TOKEN} --source https://api.nuget.org/v3/index.json");
+        }
     }
 
     private static void refreshDirectory(string directory)
